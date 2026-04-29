@@ -75,8 +75,6 @@ func runProxy(d driver.Driver, n *negroni.Negroni, logger *logrusx.Logger, prom 
 			return d.Configuration().CORS("proxy")
 		}))
 
-		n.UseFunc(otelx.SpanNameRecorderNegroniFunc)
-
 		n.UseHandler(proxyHandler)
 
 		certs := cert(d.Configuration(), "proxy", logger)
@@ -123,8 +121,6 @@ func runAPI(d driver.Driver, n *negroni.Negroni, logger *logrusx.Logger, prom *m
 		n.Use(corsx.ContextualizedMiddleware(func(ctx context.Context) (opts cors.Options, enabled bool) { //nolint:staticcheck // legacy middleware still supported
 			return d.Configuration().CORS("api")
 		}))
-
-		n.UseFunc(otelx.SpanNameRecorderNegroniFunc)
 
 		n.UseHandler(router)
 

@@ -16,7 +16,6 @@ import (
 	"github.com/ory/oathkeeper/pipeline/authn"
 	"github.com/ory/x/configx"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,8 +57,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 		r             *http.Request
 		config        json.RawMessage
 		token_url     string
-		setup         func(*testing.T, *httprouter.Router, json.RawMessage)
-		check         func(*testing.T, *httprouter.Router, json.RawMessage)
+		setup         func(*testing.T, *http.ServeMux, json.RawMessage)
+		check         func(*testing.T, *http.ServeMux, json.RawMessage)
 		expectErr     error
 		expectSession *authn.AuthenticationSession
 	}{
@@ -76,8 +75,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectErr: helper.ErrUnauthorized(),
 			config:    json.RawMessage(`{}`),
 			token_url: "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.WriteError(w, r, helper.ErrUnauthorized())
 				})
@@ -90,8 +89,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectSession: &authn.AuthenticationSession{Subject: "client"},
 			config:        json.RawMessage(`{}`),
 			token_url:     "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.Write(w, r, map[string]interface{}{"access_token": "foo-token", "expires_in": 3600})
 				})
@@ -104,9 +103,9 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectSession: &authn.AuthenticationSession{Subject: "cache-case-1"},
 			config:        json.RawMessage(`{ "cache": { "enabled": true } }`),
 			token_url:     "",
-			setup: func(t *testing.T, h *httprouter.Router, c json.RawMessage) {
+			setup: func(t *testing.T, h *http.ServeMux, c json.RawMessage) {
 				calls := 0
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					calls++
 					if calls == 2 {
 						h := herodot.NewJSONWriter(logger)
@@ -134,8 +133,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectSession: &authn.AuthenticationSession{Subject: "cache-case-2"},
 			config:        json.RawMessage(`{ "cache": { "enabled": true } }`),
 			token_url:     "",
-			setup: func(t *testing.T, h *httprouter.Router, c json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, c json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.Write(w, r, map[string]interface{}{"access_token": "foo-token", "expires_in": 1})
 				})
@@ -156,9 +155,9 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectSession: &authn.AuthenticationSession{Subject: "cache-case-3"},
 			config:        json.RawMessage(`{ "cache": { "enabled": true } }`),
 			token_url:     "",
-			setup: func(t *testing.T, h *httprouter.Router, c json.RawMessage) {
+			setup: func(t *testing.T, h *http.ServeMux, c json.RawMessage) {
 				calls := 0
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					calls++
 					if calls == 2 {
 						h := herodot.NewJSONWriter(logger)
@@ -186,9 +185,9 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectSession: &authn.AuthenticationSession{Subject: "cache-case-4"},
 			config:        json.RawMessage(`{ "cache": { "enabled": true } }`),
 			token_url:     "",
-			setup: func(t *testing.T, h *httprouter.Router, c json.RawMessage) {
+			setup: func(t *testing.T, h *http.ServeMux, c json.RawMessage) {
 				calls = 0
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					calls++
 					if calls == 3 {
 						h := herodot.NewJSONWriter(logger)
@@ -218,7 +217,7 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 				// wait cache to save value
 				time.Sleep(time.Millisecond * 10)
 			},
-			check: func(t *testing.T, router *httprouter.Router, message json.RawMessage) {
+			check: func(t *testing.T, _ *http.ServeMux, _ json.RawMessage) {
 				require.Equal(t, 2, calls, "expected a call to the token endpoint per token URL config")
 			},
 		},
@@ -229,9 +228,9 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectSession: &authn.AuthenticationSession{Subject: "cache-case-5"},
 			config:        json.RawMessage(`{ "cache": { "enabled": true } }`),
 			token_url:     "",
-			setup: func(t *testing.T, h *httprouter.Router, c json.RawMessage) {
+			setup: func(t *testing.T, h *http.ServeMux, c json.RawMessage) {
 				calls = 0
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					calls++
 					if calls == 3 {
 						h := herodot.NewJSONWriter(logger)
@@ -266,7 +265,7 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 				// wait cache to save value
 				time.Sleep(time.Millisecond * 10)
 			},
-			check: func(t *testing.T, router *httprouter.Router, message json.RawMessage) {
+			check: func(t *testing.T, _ *http.ServeMux, _ json.RawMessage) {
 				require.Equal(t, 2, calls, "expected a call to the token endpoint per scope config")
 			},
 		},
@@ -276,8 +275,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectErr: helper.ErrUpstreamServiceNotAvailable(),
 			config:    json.RawMessage(`{}`),
 			token_url: "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.WriteError(w, r, helper.ErrUpstreamServiceNotAvailable())
 				})
@@ -289,8 +288,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectErr: helper.ErrUpstreamServiceTimeout(),
 			config:    json.RawMessage(`{}`),
 			token_url: "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.WriteError(w, r, helper.ErrUpstreamServiceTimeout())
 				})
@@ -302,8 +301,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectErr: helper.ErrUpstreamServiceInternalServerError(),
 			config:    json.RawMessage(`{}`),
 			token_url: "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.WriteError(w, r, helper.ErrUpstreamServiceInternalServerError())
 				})
@@ -315,8 +314,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectErr: helper.ErrUpstreamServiceNotFound(),
 			config:    json.RawMessage(`{}`),
 			token_url: "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/v1/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/v1/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.Write(w, r, map[string]interface{}{"access_token": "foo-token"})
 				})
@@ -328,8 +327,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 			expectErr: helper.ErrUnauthorized(),
 			config:    json.RawMessage(`{}`),
 			token_url: "",
-			setup: func(t *testing.T, h *httprouter.Router, _ json.RawMessage) {
-				h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+			setup: func(t *testing.T, h *http.ServeMux, _ json.RawMessage) {
+				h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 					h := herodot.NewJSONWriter(logger)
 					h.WriteError(w, r, helper.ErrForbidden())
 				})
@@ -337,7 +336,7 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 		},
 	} {
 		t.Run(fmt.Sprintf("method=authenticate/case=%d", k), func(t *testing.T) {
-			router := httprouter.New()
+			router := http.NewServeMux()
 
 			ts := httptest.NewServer(router)
 
@@ -370,8 +369,8 @@ func TestAuthenticatorOAuth2ClientCredentials(t *testing.T) {
 		})
 	}
 
-	h := httprouter.New()
-	h.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+	h := http.NewServeMux()
+	h.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 		h := herodot.NewJSONWriter(logger)
 		u, p, ok := r.BasicAuth()
 		if !ok || u != "client" || p != "secret" {

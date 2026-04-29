@@ -19,7 +19,6 @@ import (
 	"github.com/ory/x/configx"
 	"github.com/ory/x/logrusx"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/sjson"
@@ -43,7 +42,7 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 	t.Run("method=authenticate", func(t *testing.T) {
 		for k, tc := range []struct {
 			d              string
-			setup          func(*testing.T, *httprouter.Router)
+			setup          func(*testing.T, *http.ServeMux)
 			r              *http.Request
 			config         json.RawMessage
 			expectErr      bool
@@ -59,8 +58,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because wrong response",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "required_scope": ["scope-a", "scope-b"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "scope-a scope-b", r.Form.Get("scope"))
@@ -113,8 +112,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				r:         &http.Request{Header: http.Header{"X-Custom-Header": {"token"}}},
 				config:    []byte(`{"token_from": {"header": "X-Custom-Header"}}`),
 				expectErr: false,
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
@@ -132,8 +131,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				},
 				config:    []byte(`{"token_from": {"query_parameter": "token"}, "prefix": "tok"}`),
 				expectErr: false,
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
@@ -147,8 +146,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				r:         &http.Request{Header: http.Header{"Cookie": {"biscuit=token"}}},
 				config:    []byte(`{"token_from": {"cookie": "biscuit"}}`),
 				expectErr: false,
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
@@ -161,8 +160,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because not active",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
@@ -181,8 +180,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass and set host when preserve_host is true",
 				r:      &http.Request{Host: "some-host", Header: http.Header{"Authorization": {"bearer token"}}, Method: "POST"},
 				config: []byte(`{"preserve_host": true}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "some-host", r.Header.Get("X-Forwarded-Host"))
@@ -202,8 +201,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass additional headers to introspection endpoint ",
 				r:      &http.Request{Host: "some-host", Header: http.Header{"Authorization": {"bearer token"}}, Method: "POST"},
 				config: []byte(`{"preserve_host": true, "introspection_request_headers": {"X-Test": "test123", "X-Forwarded-For": "some-other-host", "Z-Test": "test987"}}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "some-host", r.Header.Get("X-Forwarded-Host"), "preserve_host takes precedence over introspection_request_headers")
@@ -225,8 +224,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because active and no issuer / audience expected",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
@@ -245,8 +244,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because no scope strategy",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "required_scope": ["scope-a", "scope-b"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "scope-a scope-b", r.Form.Get("scope"))
@@ -267,8 +266,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because scope strategy is `none`",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "none", "required_scope": ["scope-a", "scope-b"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "scope-a scope-b", r.Form.Get("scope"))
@@ -289,8 +288,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because active and scope matching exactly",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "exact", "required_scope": ["scope-a", "scope-b"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "", r.Form.Get("scope"))
@@ -311,8 +310,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because active but scope not matching exactly",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "exact", "required_scope": ["scope-a", "scope-b", "scope-c"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "", r.Form.Get("scope"))
@@ -333,8 +332,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because active and scope matching hierarchically",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "hierarchic", "required_scope": ["scope-a", "scope-b.foo", "scope-c.bar"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "", r.Form.Get("scope"))
@@ -355,8 +354,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because active but scope not matching hierarchically",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "hierarchic", "required_scope": ["scope-a", "scope-b.foo", "scope-c.bar"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "", r.Form.Get("scope"))
@@ -377,8 +376,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because active and scope matching wildcard",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "wildcard", "required_scope": ["scope-a", "scope-b.foo", "scope-c.bar"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "", r.Form.Get("scope"))
@@ -399,8 +398,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because active but scope not matching wildcard",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "scope_strategy": "wildcard", "required_scope": ["scope-a", "scope-b.foo", "scope-c.bar"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "", r.Form.Get("scope"))
@@ -421,8 +420,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because active but issuer not matching",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "required_scope": ["scope-a"], "trusted_issuers": ["foo", "bar"]}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
 							Active:   true,
@@ -441,8 +440,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because active and issuer matching",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "required_scope": ["scope-a"], "trusted_issuers": ["foo", "bar"]}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
 							Active:   true,
@@ -461,8 +460,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because active but audience not matching",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "required_scope": ["scope-a"], "trusted_issuers": ["foo", "bar"], "target_audience": ["audience"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
 							Active:   true,
@@ -481,8 +480,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should fail because token use not matching",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{}`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
@@ -502,8 +501,8 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "required_scope": ["scope-a"], "trusted_issuers": ["foo", "bar"], "target_audience": ["audience"] }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.NoError(t, json.NewEncoder(w).Encode(&AuthenticatorOAuth2IntrospectionResult{
 							Active:   true,
@@ -522,15 +521,15 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because audience and scopes match configuration",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "pre_authorization":{"client_id":"some_id","client_secret":"some_secret","enabled":true,"scope":["foo","bar"]} }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "", r.Form.Get("audience"))
 						require.Equal(t, "foo bar", r.Form.Get("scope"))
 						w.Header().Set("Content-type", "application/json; charset=us-ascii")
 						require.NoError(t, json.NewEncoder(w).Encode(&map[string]interface{}{"access_token": "foo-token"}))
 					})
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "Bearer foo-token", r.Header.Get("authorization"))
@@ -545,15 +544,15 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because audience and scopes match configuration",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "pre_authorization":{"client_id":"some_id","client_secret":"some_secret","enabled":true,"scope":["foo","bar"]} }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "", r.Form.Get("audience"))
 						require.Equal(t, "foo bar", r.Form.Get("scope"))
 						w.Header().Set("Content-type", "application/json; charset=us-ascii")
 						require.NoError(t, json.NewEncoder(w).Encode(&map[string]interface{}{"access_token": "foo-token"}))
 					})
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "Bearer foo-token", r.Header.Get("authorization"))
@@ -568,15 +567,15 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 				d:      "should pass because audience and scopes should not be requested",
 				r:      &http.Request{Header: http.Header{"Authorization": {"bearer token"}}},
 				config: []byte(`{ "pre_authorization":{"client_id":"some_id","client_secret":"some_secret","enabled":true} }`),
-				setup: func(t *testing.T, m *httprouter.Router) {
-					m.POST("/oauth2/token", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+				setup: func(t *testing.T, m *http.ServeMux) {
+					m.HandleFunc("POST /oauth2/token", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "", r.Form.Get("audience"))
 						require.Equal(t, "", r.Form.Get("scope"))
 						w.Header().Set("Content-type", "application/json; charset=us-ascii")
 						require.NoError(t, json.NewEncoder(w).Encode(&map[string]interface{}{"access_token": "foo-token"}))
 					})
-					m.POST("/oauth2/introspect", func(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+					m.HandleFunc("POST /oauth2/introspect", func(w http.ResponseWriter, r *http.Request) {
 						require.NoError(t, r.ParseForm())
 						require.Equal(t, "token", r.Form.Get("token"))
 						require.Equal(t, "Bearer foo-token", r.Header.Get("authorization"))
@@ -589,7 +588,7 @@ func TestAuthenticatorOAuth2Introspection(t *testing.T) {
 			},
 		} {
 			t.Run(fmt.Sprintf("case=%d/description=%s", k, tc.d), func(t *testing.T) {
-				router := httprouter.New()
+				router := http.NewServeMux()
 				if tc.setup != nil {
 					tc.setup(t, router)
 				}

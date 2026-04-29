@@ -5,11 +5,9 @@ package authn
 
 import (
 	"context"
-	"net/http/httptest"
 	"testing"
 	"time"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -22,8 +20,6 @@ import (
 
 func TestClientCredentialsCache(t *testing.T) {
 	t.Parallel()
-	ts := httptest.NewServer(httprouter.New())
-	t.Cleanup(ts.Close)
 
 	logger := logrusx.New("", "")
 	c, err := configuration.NewKoanfProvider(
@@ -31,7 +27,7 @@ func TestClientCredentialsCache(t *testing.T) {
 		nil,
 		logger,
 		configx.WithValues(map[string]interface{}{
-			"authenticators.oauth2_client_credentials.config.token_url":     ts.URL + "/oauth2/token",
+			"authenticators.oauth2_client_credentials.config.token_url":     "https://example.com/oauth2/token",
 			"authenticators.oauth2_client_credentials.config.cache.enabled": true,
 		}))
 	require.NoError(t, err)

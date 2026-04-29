@@ -16,7 +16,6 @@ import (
 	"github.com/ory/x/configx"
 	"github.com/ory/x/logrusx"
 
-	"github.com/julienschmidt/httprouter"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/urfave/negroni"
@@ -77,10 +76,10 @@ func PrometheusTestApp(middleware *Middleware) http.Handler {
 	n := negroni.Classic()
 	n.Use(middleware)
 
-	r := httprouter.New()
+	r := http.NewServeMux()
 
 	for _, path := range serverConfigPaths {
-		r.GET(path, func(res http.ResponseWriter, req *http.Request, p httprouter.Params) {
+		r.HandleFunc("GET "+path, func(res http.ResponseWriter, req *http.Request) {
 			_, _ = fmt.Fprint(res, "OK")
 		})
 	}
